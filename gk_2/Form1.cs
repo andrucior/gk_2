@@ -12,6 +12,7 @@ namespace gk_2
     public partial class Form1 : Form
     {
         private BezierSurface? bezierSurface;
+        private int[,]? depth;
         private DirectBitmap? texture, normalMapBitmap, bitmap;
         private Mesh? mesh;
         private Color lightColor = Color.White;
@@ -24,16 +25,19 @@ namespace gk_2
         private bool isAnimating = false;
         private Vector3 lightDirection;
         private Vector3? objectColor;
-        private System.Windows.Forms.Timer timer, timer2;
+        private System.Windows.Forms.Timer? timer, timer2, tetrahedronTimer;
         private bool useMap = false;
         private Graphics? g;
         private int maxFlag = 0;
         private float ml;
         private bool reflector;
+        private Tetrahedron? tetrahedron;
+        private List<Vector3> tetrahedronColors = new List<Vector3> { new Vector3(0, 0, 255), new Vector3(0, 255, 0), new Vector3(255, 0, 0), new Vector3(128, 128, 0) };
+
+        // 4-scian
+        // sciany roznych kolorow
         public Form1()
         {
-            // Falowanie
-            // 
 
             float theta = 45f;
             float phi = 30f;
@@ -52,10 +56,28 @@ namespace gk_2
             InitializeGraphics();
             accuracy = triangulationTrackBar.Value;
             InitializeBezierSurface();
+            //InitializeTetrahedron();
             checkBox1.Checked = true;
             timer = new System.Windows.Forms.Timer();
             timer.Interval = 50;
             timer.Tick += Timer_Tick;
+            //tetrahedronTimer = new System.Windows.Forms.Timer();
+            //tetrahedronTimer.Interval = 50;
+            //tetrahedronTimer.Tick += Tetrahedron_Timer_Tick;
+            //tetrahedronTimer.Start();
+        }
+        private void Tetrahedron_Timer_Tick(object? sender, EventArgs e) 
+        {
+            Matrix3x3 matrix = Matrix3x3.CreateRotationZ((float)(Math.PI / 20));
+            foreach (var vertex in tetrahedron.Vertices)
+            {
+                vertex.N_before = vertex.N_after;
+                vertex.N_after = Vector3.Cross(vertex.P_after, vertex.P_before); // do poprawy 
+                vertex.P_before = vertex.P_after;
+                vertex.P_after = matrix.Transform(vertex.P_before);     
+            }
+
+            pictureBox1.Invalidate();
         }
         private void Timer_Tick(object? sender, EventArgs e)
         {
@@ -101,10 +123,79 @@ namespace gk_2
         private void InitializeGraphics()
         {
             bitmap = new DirectBitmap(pictureBox1.Width, pictureBox1.Height);
+            depth = new int[bitmap.Width, bitmap.Height];
+            for (int i = 0; i < bitmap.Width; i++) 
+            {
+                for (int j = 0; j < bitmap.Height; j++)
+                {
+                    depth[i, j] = int.MaxValue;
+                }
+            }
             g = Graphics.FromImage(bitmap.Bitmap);
             g.ScaleTransform(1, -1);
             g.TranslateTransform(pictureBox1.Width / 2, -pictureBox1.Height / 2);
         }
+        private void InitializeTetrahedron()
+        {
+            float x1 = -63.0f, x2 = -61.0f, x3 = 30.0f, x4 = 45.0f,
+                y1 = -200.0f, y2 = 10.0f, y3 = 30.0f, y4 = 45.0f,
+                z1 = 19.0f, z2 = 90.0f, z3 = 100.0f, z4 = 120.0f;
+
+            tetrahedron = new Tetrahedron
+            {
+                 
+                Vertex1 = new Vertex(
+                   new Vector3(x1, y1, z1),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   new Vector3(x1, y1, z1),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   float.MaxValue,
+                   float.MaxValue
+                ),
+                Vertex2 = new Vertex(
+                   new Vector3(x2, y2, z2),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   new Vector3(x2, y2, z2),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   float.MaxValue,
+                   float.MaxValue
+                ),
+                Vertex3 = new Vertex(
+                   new Vector3(x3, y3, z3),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   new Vector3(x3, y3, z3),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   float.MaxValue,
+                   float.MaxValue
+                ),
+                Vertex4 = new Vertex(
+                   new Vector3(x4, y4, z4),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   new Vector3(x4, y4, z4),
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   Vector3.Zero,
+                   float.MaxValue,
+                   float.MaxValue
+                ),
+            };
+            tetrahedron.CalculateTriangles();
+        }
+    
 
         private void pictureBox1_Paint(object sender, PaintEventArgs e)
         {
@@ -122,27 +213,38 @@ namespace gk_2
 
             foreach (var triangle in mesh.Triangles)
             {
-                DrawTriangle(g, triangle);
+                DrawTriangle(g, triangle, false);
             }
+            int i = 0;
+            //foreach (var triangle in tetrahedron.Triangles)
+            //{
+            //    DrawTriangle(g, triangle, true, tetrahedronColors[i++]);
+            //}
+
+
             e.Graphics.DrawImage(bitmap.Bitmap, 0, 0);
         }
-        private void DrawTriangle(Graphics g, Triangle triangle)
+        
+        private void DrawTriangle(Graphics g, Triangle triangle, bool tri, Vector3? triangleColor = null)
         {
             Point pt1 = Project3DTo2D(triangle.Vertex1.P_after);
             Point pt2 = Project3DTo2D(triangle.Vertex2.P_after);
             Point pt3 = Project3DTo2D(triangle.Vertex3.P_after);
 
             Vector3 viewDirection = new Vector3(0f, 0f, 1f);
-
+            Vector3? objColor = triangleColor == null ? objectColor : triangleColor;
             Vector3 lightColorVector = new Vector3(lightColor.R, lightColor.G, lightColor.B);
+            
 
             if (!checkBox1.Checked)
             {
-                var filler = new PolygonFiller(m, ks, kd, lightColorVector, lightDirection, objectColor, viewDirection);
+                var filler = new PolygonFiller(m, ks, kd, lightColorVector, lightDirection, objColor, viewDirection);
                 filler.normalMapBitmap = normalMapBitmap;
                 filler.bezierSurface = bezierSurface;
                 filler.M = new Matrix3x3(triangle.Vertex1.Pu_after, triangle.Vertex1.Pv_after, triangle.Vertex1.N_after);
                 filler.lightDirection = lightDirection;
+                filler.objectColor = objColor;
+                filler.depth = depth;
 
                 if (texture == null)
                 {
@@ -150,7 +252,7 @@ namespace gk_2
                 }
                 else
                 {
-                    filler.FillPolygon(bitmap, texture, new List<Vertex>() { triangle.Vertex1, triangle.Vertex2, triangle.Vertex3 }, pictureBox1.Width, pictureBox1.Height, useMap, reflector, ml);
+                    filler.FillPolygon(bitmap, texture, new List<Vertex>() { triangle.Vertex1, triangle.Vertex2, triangle.Vertex3 }, pictureBox1.Width, pictureBox1.Height, useMap, reflector, ml, tri);
                 }
             }
             else // (checkBox1.Checked)

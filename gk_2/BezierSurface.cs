@@ -114,8 +114,7 @@ public class BezierSurface
                         Vector3.Zero,                        
                         u,                             
                         v                                    
-                    );
-                    
+                    );      
                 }
             }
             for (int i = 0; i < 4;i++) 

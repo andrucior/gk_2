@@ -10,6 +10,7 @@ namespace gk_2
     public class PolygonFiller
     {
         private float kd, ks, m;
+        public int[,] depth {  get; set; }
         public Vector3? lightColorVector, lightDirection, objectColor, viewDirection;
         public DirectBitmap? normalMapBitmap {  get; set; }
         public BezierSurface? bezierSurface { get; set; }
@@ -129,7 +130,7 @@ namespace gk_2
             });
         }
 
-        public void FillPolygon(DirectBitmap bitmap, DirectBitmap texture, List<Vertex> polygon3D, int offsetX, int offsetY, bool modifiedNormalVector, bool reflector, float ml)
+        public void FillPolygon(DirectBitmap bitmap, DirectBitmap texture, List<Vertex> polygon3D, int offsetX, int offsetY, bool modifiedNormalVector, bool reflector, float ml, bool triangle)
         {
             List<Point> polygon2D = new List<Point>();
             foreach (var vertex in polygon3D)
@@ -170,15 +171,22 @@ namespace gk_2
                     for (int x = startX; x <= endX; x++)
                     {
                         Vector3 barycentricCoord = PrecomputedBarycentric(polygon2D[0], polygon2D[1], polygon2D[2], new Point(x, y));
-                        if (barycentricCoord.X >= 0 && barycentricCoord.Y >= 0 && barycentricCoord.Z >= 0)
+                        int z = (int)(polygon3D[0].P_after.Z * barycentricCoord.X + polygon3D[1].P_after.Z * barycentricCoord.Y + polygon3D[2].P_after.Z * barycentricCoord.Z);
+
+                        if (((z < depth[x + offsetX / 2, -y + offsetY / 2] && triangle) || !triangle)  && barycentricCoord.X >= 0 && barycentricCoord.Y >= 0 && barycentricCoord.Z >= 0)
                         {
+                            depth[x + offsetX / 2, -y + offsetY / 2] = z;
+
                             float u = polygon3D[0].U * barycentricCoord.X + polygon3D[1].U * barycentricCoord.Y + polygon3D[2].U * barycentricCoord.Z;
                             float v = polygon3D[0].V * barycentricCoord.X + polygon3D[1].V * barycentricCoord.Y + polygon3D[2].V * barycentricCoord.Z;
 
                             int texX = (int)(u * (texture.Width - 1));
                             int texY = (int)(v * (texture.Height - 1));
-                            Color textureColor = texture.GetPixel(texX, texY);
-
+                            Color textureColor;
+                            if (!triangle)
+                                textureColor = texture.GetPixel(texX, texY);
+                            else
+                                textureColor = Color.FromArgb((int)objectColor.Value.X, (int)objectColor.Value.Y, (int)objectColor.Value.Z);
                             Vector3 normal;
                             if (!modifiedNormalVector)
                             {
@@ -193,6 +201,7 @@ namespace gk_2
                                 normal = GetModifiedNormal(u, v, polygon3D, barycentricCoord);
                             }
 
+
                             Vector3 position = polygon3D[0].P_after * barycentricCoord.X +
                                       polygon3D[1].P_after * barycentricCoord.Y +
                                       polygon3D[2].P_after * barycentricCoord.Z;
@@ -206,10 +215,15 @@ namespace gk_2
                             int green = Math.Clamp((int)(color.Y * 255), 0, 255);
                             int blue = Math.Clamp((int)(color.Z * 255), 0, 255);
                             bitmap.SetPixel(x + offsetX / 2, -y + offsetY / 2, Color.FromArgb(red, green, blue));
+
                         }
                     }
                 }
             });
+        }
+        private int FindZ()
+        {
+            throw new NotImplementedException();
         }
 
         private Vector3 GetModifiedNormal(float u, float v, List<Vertex> polygon3D, Vector3 barycentricCoord)
